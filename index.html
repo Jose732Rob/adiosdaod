@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Predicción de dibujos feos</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 300px;
+            margin: 0 auto;
+            padding: 10px;
+            text-align: center;
+        }
+        #canvas {
+            border: 2px solid #000;
+            margin: 10px auto;
+            display: block;
+            background-color: black;
+            cursor: crosshair;
+            width: 280px;
+            height: 280px;
+        }
+        button {
+            padding: 5px 10px;
+            margin: 2px;
+            background-color: #f0f0f0;
+            border: 1px solid #000;
+            cursor: pointer;
+        }
+        #result {
+            margin: 10px 0;
+            font-size: 20px;
+            min-height: 24px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Predicción de dibujos feos</h1>
+    
+    <canvas id="canvas"></canvas>
+    
+    <div>
+        <button id="clearBtn">Límpiar</button>
+        <button id="predictBtn">Predecir</button>
+    </div>
+    
+    <div id="result">+</div>
+    
+    <script>
+        // Variables
+        let model;
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Inicializar canvas
+        function initCanvas() {
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 20;
+            ctx.lineCap = 'round';
+            
+            let isDrawing = false;
+            
+            canvas.addEventListener('mousedown', () => isDrawing = true);
+            canvas.addEventListener('mousemove', draw);
+            canvas.addEventListener('mouseup', () => isDrawing = false);
+            canvas.addEventListener('mouseout', () => isDrawing = false);
+        }
+        
+        function draw(e) {
+            if (!isDrawing) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+        }
+        
+        // Cargar modelo
+        async function loadModel() {
+            model = await tf.loadLayersModel('model.json');
+        }
+        
+        // Predecir
+        async function predict() {
+            if (!model) return;
+            
+            // Preprocesar
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = 28;
+            tempCanvas.height = 28;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(canvas, 0, 0, 28, 28);
+            
+            // Tensor
+            const tensor = tf.tidy(() => {
+                return tf.browser.fromPixels(tempCtx.getImageData(0, 0, 28, 28), 1)
+                    .toFloat()
+                    .div(255.0)
+                    .reshape([1, 28, 28, 1]);
+            });
+            
+            // Predicción
+            const prediction = await model.predict(tensor).data();
+            const digit = prediction.indexOf(Math.max(...prediction));
+            
+            document.getElementById('result').textContent = digit;
+            
+            // Limpiar
+            tensor.dispose();
+        }
+        
+        // Limpiar
+        function clearCanvas() {
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.beginPath();
+            document.getElementById('result').textContent = '+';
+        }
+        
+        // Iniciar
+        window.onload = () => {
+            initCanvas();
+            loadModel();
+            
+            document.getElementById('predictBtn').addEventListener('click', predict);
+            document.getElementById('clearBtn').addEventListener('click', clearCanvas);
+        };
+    </script>
+</body>
+</html>
